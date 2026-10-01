@@ -33,6 +33,13 @@ Copie `.env.example` para `.env` e preencha `GEMINI_API_KEY` se quiser o parecer
 
 Não versione o arquivo `.env`.
 
+## Deploy na Vercel
+
+1. Em [vercel.com](https://vercel.com) importe o repositório [TradeObjetiva/BI-VALORIZA-O-ROTA](https://github.com/TradeObjetiva/BI-VALORIZA-O-ROTA).
+2. Framework: **Vite**. Build: `npm run build`. Output: `dist`. Install: `npm install --legacy-peer-deps`.
+3. (Opcional) Em **Environment Variables**, adicione `GEMINI_API_KEY` para o parecer de IA. Sem a chave, o diagnóstico local continua funcionando.
+4. Deploy. O dashboard, upload de planilha e IndexedDB funcionam no navegador; as rotas `/api/ai-diagnostico` e `/api/ai-chat` sobem como funções serverless.
+
 ## Publicar no GitHub Pages
 
 O workflow em `.github/workflows/deploy.yml` publica o build em Pages a cada push em `main`.

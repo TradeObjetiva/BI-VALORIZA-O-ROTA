@@ -1,0 +1,33 @@
+# Dependências e build
+node_modules/
+dist/
+server.js
+*.local
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Logs e cache
+*.log
+npm-debug.log*
+.vite/
+.cache/
+.turbo/
+
+# Sistema e IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Planilhas reais (não versionar dados de clientes)
+*.xlsx
+*.xls
+*.csv
+
+# Cobertura e artefatos
+coverage/
+*.tsbuildinfo

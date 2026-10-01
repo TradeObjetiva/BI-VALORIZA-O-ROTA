@@ -1,0 +1,6 @@
+{
+  "name": "BI Valorização & Trade Intelligence",
+  "description": "Sistema avançado de BI e Inteligência de Trade Marketing para análise de valorização de promotores, eficiência em R$/hora, custo por visita e simulações com IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

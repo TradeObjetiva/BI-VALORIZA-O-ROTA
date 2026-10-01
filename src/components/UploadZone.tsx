@@ -56,22 +56,33 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         }
 
         const headers = json[headerIdx].map((h: any) => String(h || '').trim());
-        const rows: RawTradeRow[] = json
-          .slice(headerIdx + 1)
-          .filter(
-            (row) =>
-              Array.isArray(row) &&
-              row.some(
-                (v) => v !== null && v !== undefined && String(v).trim() !== ''
-              )
-          )
-          .map((row) => {
-            const obj: RawTradeRow = {};
-            headers.forEach((h, i) => {
-              if (h) obj[h] = row[i] ?? null;
-            });
-            return obj;
+        const rows: RawTradeRow[] = [];
+
+        for (let r = headerIdx + 1; r < json.length; r++) {
+          const rowData = json[r];
+          if (
+            !Array.isArray(rowData) ||
+            !rowData.some(
+              (v) => v !== null && v !== undefined && String(v).trim() !== ''
+            )
+          ) {
+            continue;
+          }
+
+          const obj: RawTradeRow = {};
+          headers.forEach((h, c) => {
+            if (!h) return;
+            const cellAddr = XLSX.utils.encode_cell({ r, c });
+            const cell = worksheet[cellAddr];
+            // If cell has formatted text with colon (time) e.g. "03:30", preserve it
+            if (cell && cell.w && (cell.w.includes(':') || /\b\d+h\b/i.test(cell.w))) {
+              obj[h] = cell.w;
+            } else {
+              obj[h] = rowData[c] ?? null;
+            }
           });
+          rows.push(obj);
+        }
 
         if (rows.length === 0) {
           throw new Error('Nenhum registro de dados encontrado na planilha.');

@@ -15,13 +15,118 @@ export const MULTIPLIER = 52 / 12; // 4.3333333...
 export function parseNum(val: any): number {
   if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  
   const s = String(val)
     .replace('R$', '')
     .replace(/\s+/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const n = parseFloat(s);
+    .trim();
+
+  if (!s) return 0;
+
+  // If contains both dot and comma (Brazilian currency/thousand format: e.g. 1.250,50)
+  if (s.includes('.') && s.includes(',')) {
+    const normalized = s.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(normalized);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // If contains comma only (e.g. 3,5 or 1250,50)
+  if (s.includes(',')) {
+    const n = parseFloat(s.replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  // If contains dot only with 1 or 2 decimals (e.g. 3.5, 3.50, 240.0) -> decimal
+  if (/^\d+\.\d{1,2}$/.test(s)) {
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // Fallback
+  const normalized = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(normalized);
   return isNaN(n) ? 0 : n;
+}
+
+/**
+ * Parses hours from varied formats:
+ * - Time format: "03:30", "3:30", "03:30:00" -> 3.5
+ * - Text format: "3h30", "3h 30m", "3h30min", "3h" -> 3.5
+ * - Decimal: "3,5", "3.5", "3,50" -> 3.5
+ * - Excel time serial fraction: 0.14583333333333334 -> 3.5 (0.1458 * 24)
+ */
+export function parseHours(val: any): number {
+  if (val === null || val === undefined || val === '') return 0;
+
+  if (typeof val === 'number') {
+    if (isNaN(val)) return 0;
+    // Excel time fraction (e.g. 0.14583333333333334 for 03:30)
+    if (val > 0 && val < 1 && val.toString().length > 6) {
+      return Math.round(val * 24 * 100) / 100;
+    }
+    return val;
+  }
+
+  const s = String(val).trim();
+  if (!s) return 0;
+
+  // 1. Time format "HH:MM" or "HH:MM:SS" (e.g. "03:30", "3:30", "03:30:00")
+  if (s.includes(':')) {
+    const parts = s.replace(/[^0-9:]/g, '').split(':');
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    const sec = parseInt(parts[2], 10) || 0;
+    return Math.round((h + m / 60 + sec / 3600) * 100) / 100;
+  }
+
+  // 2. Portuguese format "3h30", "3h 30m", "3h30min", "3h"
+  const hMatch = s.match(/^(\d+(?:[.,]\d+)?)\s*h(?:oras?)?(?:\s*(\d+)(?:m|min)?)?/i);
+  if (hMatch) {
+    const h = parseFloat(hMatch[1].replace(',', '.'));
+    const m = hMatch[2] ? parseFloat(hMatch[2]) : 0;
+    return Math.round(((isNaN(h) ? 0 : h) + m / 60) * 100) / 100;
+  }
+
+  // 3. Decimal number with comma or dot (e.g. "3,5", "3.5", "3,50")
+  return parseNum(s);
+}
+
+function normalizeKey(k: string): string {
+  return k
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+export function findRowValue(r: RawTradeRow, aliases: string[]): any {
+  if (!r || typeof r !== 'object') return undefined;
+  const normalizedAliases = aliases.map(normalizeKey);
+  const keys = Object.keys(r);
+
+  // 1. Exact normalized match
+  for (const alias of normalizedAliases) {
+    for (const key of keys) {
+      if (normalizeKey(key) === alias) {
+        const val = r[key];
+        if (val !== null && val !== undefined && val !== '') return val;
+      }
+    }
+  }
+
+  // 2. Partial match
+  for (const alias of normalizedAliases) {
+    for (const key of keys) {
+      const nk = normalizeKey(key);
+      if (nk.includes(alias) || alias.includes(nk)) {
+        const val = r[key];
+        if (val !== null && val !== undefined && val !== '') return val;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 export function fmt(v: number): string {
@@ -42,33 +147,127 @@ export function fmtNumber(v: number, decimals = 1): string {
 }
 
 export function getRowVisitasSemanais(r: RawTradeRow): number {
-  const fs = String(r['FREQ. SEMANAL'] || '').toUpperCase();
-  if (fs.includes('15/15')) return 0.5;
-  if (fs.includes('5X')) return 5;
-  if (fs.includes('4X')) return 4;
-  if (fs.includes('3X')) return 3;
-  if (fs.includes('2X')) return 2;
-  if (fs.includes('1X')) return 1;
+  const rawFreq = findRowValue(r, [
+    'FREQ. SEMANAL',
+    'FREQ SEMANAL',
+    'FREQUENCIA SEMANAL',
+    'FREQUENCIA',
+    'FREQ',
+    'VISITAS SEMANAIS',
+    'VISITAS',
+    'DIAS POR SEMANA',
+    'DIAS NA SEMANA',
+    'DIAS SEMANAIS',
+    'QTD DIAS',
+    'DIAS',
+  ]);
 
-  const freqVal =
-    r['FREQUÊNCIA'] ?? r['FREQUENCIA'] ?? r['FREQUNCIA'] ?? r['FREQU?NCIA'];
-  const n = parseNum(freqVal);
+  if (rawFreq === null || rawFreq === undefined || rawFreq === '') return 1;
+
+  if (typeof rawFreq === 'number') {
+    return rawFreq > 0 ? rawFreq : 1;
+  }
+
+  const s = String(rawFreq).toUpperCase().trim();
+
+  if (s.includes('15/15') || s.includes('QUINZENAL')) return 0.5;
+  if (s.includes('SEG A SAB') || s.includes('SEGUNDA A SABADO') || s.includes('SEG A SÁB')) return 6;
+  if (s.includes('SEG A SEX') || s.includes('SEGUNDA A SEXTA')) return 5;
+
+  // Regex matches e.g. "6X", "6 X", "6X/SEM", "7X", "5X", "4X", "3X", "2X", "1X"
+  const xMatch = s.match(/(\d+(?:[.,]\d+)?)\s*X/i);
+  if (xMatch) {
+    const val = parseFloat(xMatch[1].replace(',', '.'));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // Regex matches e.g. "6 DIAS", "6 VEZES", "6 VISITAS"
+  const wordMatch = s.match(/(\d+(?:[.,]\d+)?)\s*(?:DIAS?|VEZES|VISITAS?)/i);
+  if (wordMatch) {
+    const val = parseFloat(wordMatch[1].replace(',', '.'));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  const n = parseNum(s);
   return n > 0 ? n : 1;
 }
 
 export function getRowHorasUnitarias(r: RawTradeRow): number {
-  const h = parseNum(r['HORAS POR VISITA']);
+  const rawHours = findRowValue(r, [
+    'HORAS DIARIAS',
+    'HORA DIARIA',
+    'HORAS/DIA',
+    'HORAS / DIA',
+    'HORAS POR DIA',
+    'HORA POR DIA',
+    'HORAS DIA',
+    'CARGA HORARIA DIARIA',
+    'CARGA HORARIA',
+    'JORNADA DIARIA',
+    'JORNADA',
+    'HORAS POR VISITA',
+    'HORA POR VISITA',
+    'HORAS/VISITA',
+    'HORAS VISITA',
+    'HORA VISITA',
+    'TEMPO POR VISITA',
+    'TEMPO VISITA',
+    'TEMPO EM LOJA',
+    'HORAS',
+    'HORA',
+    'TEMPO',
+  ]);
+
+  const h = parseHours(rawHours);
   return h > 0 ? h : 1;
 }
 
 export function getRowHorasSemanais(r: RawTradeRow): number {
-  return getRowHorasUnitarias(r) * getRowVisitasSemanais(r);
+  // If spreadsheet already has an explicit weekly hours column, respect it
+  const rawWeeklyHours = findRowValue(r, [
+    'HORAS SEMANAIS',
+    'HORA SEMANAL',
+    'HORAS/SEMANA',
+    'HORAS / SEMANA',
+    'HORAS/SEM',
+    'HORAS / SEM',
+    'HORAS POR SEMANA',
+    'CARGA SEMANAL',
+    'CARGA HORARIA SEMANAL',
+    'TOTAL HORAS SEMANAIS',
+    'TOTAL HORAS',
+    'TOTAL DE HORAS',
+  ]);
+
+  if (rawWeeklyHours !== undefined && rawWeeklyHours !== null && rawWeeklyHours !== '') {
+    const weeklyHours = parseHours(rawWeeklyHours);
+    if (weeklyHours > 0) {
+      return weeklyHours;
+    }
+  }
+
+  // Otherwise calculate: horas unitárias (diárias / por visita) * frequência semanal
+  return Math.round(getRowHorasUnitarias(r) * getRowVisitasSemanais(r) * 100) / 100;
 }
 
 export function getRowValorSemanal(r: RawTradeRow): number {
-  const vs = parseNum(r['VALOR SEMANAL']);
+  const rawVs = findRowValue(r, [
+    'VALOR SEMANAL',
+    'VALOR/SEM',
+    'VALOR / SEM',
+    'FATURAMENTO SEMANAL',
+    'TOTAL SEMANAL',
+  ]);
+  const vs = parseNum(rawVs);
   if (vs > 0) return vs;
-  const vu = parseNum(r['VALOR']);
+
+  const rawVu = findRowValue(r, [
+    'VALOR',
+    'VALOR UNITARIO',
+    'VALOR/VISITA',
+    'VALOR POR VISITA',
+  ]);
+  const vu = parseNum(rawVu);
   return vu * getRowVisitasSemanais(r);
 }
 
@@ -82,20 +281,29 @@ export function transformRawRow(r: RawTradeRow, idx: number): TradeRecord {
   const horasSemanais = getRowHorasSemanais(r);
   const horasMensais = horasSemanais * MULTIPLIER;
   const valorSemanal = getRowValorSemanal(r);
-  const valorUnitario = parseNum(r['VALOR']) || (visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0);
+  const rawValor = findRowValue(r, ['VALOR', 'VALOR UNITARIO', 'VALOR/VISITA']);
+  const valorUnitario = parseNum(rawValor) || (visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0);
   const vm = valorSemanal * MULTIPLIER;
   const custoPorVisita = visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0;
   const valorPorHora = horasSemanais > 0 ? valorSemanal / horasSemanais : 0;
 
+  const formVal = findRowValue(r, ['FORM', 'FORMULARIO', 'MARCA', 'PESQUISA', 'PROJETO']) || '';
+  const redeVal = findRowValue(r, ['REDE', 'CLIENTE', 'BANDEIRA', 'REDE DE VAREJO']) || '';
+  const agenteVal = findRowValue(r, ['AGENTE', 'PROMOTOR', 'PROMOTORA', 'NOME DO AGENTE', 'NOME']) || '';
+  const cpfVal = findRowValue(r, ['CPF', 'DOCUMENTO']) || '—';
+  const regiaoVal = findRowValue(r, ['REGIAO', 'ESTADO', 'UF', 'CIDADE', 'PRACA']) || '';
+  const localVal = findRowValue(r, ['LOCAL', 'RAZAO SOCIAL', 'NOME FANTASIA', 'LOJA', 'PDV', 'PONTO DE VENDA']) || '';
+  const freqSemanalVal = findRowValue(r, ['FREQ. SEMANAL', 'FREQ SEMANAL', 'FREQUENCIA']) || `${visitasSemanais}X`;
+
   return {
     id: `rec-${idx}-${Math.random().toString(36).substring(2, 7)}`,
-    form: String(r['FORM'] || '').trim() || '(Sem Formulário)',
-    rede: String(r['REDE'] || '').trim() || '(Sem Rede)',
-    agente: String(r['AGENTE'] || '').trim() || '(Sem Agente)',
-    cpf: String(r['CPF'] || '').trim() || '—',
-    regiao: String(r['REGIAO'] || '').trim() || '(Sem Região)',
-    local: String(r['LOCAL'] || r['RAZAO SOCIAL'] || '').trim() || '(Sem Local)',
-    freqSemanal: String(r['FREQ. SEMANAL'] || `${visitasSemanais}X`).trim(),
+    form: String(formVal).trim() || '(Sem Formulário)',
+    rede: String(redeVal).trim() || '(Sem Rede)',
+    agente: String(agenteVal).trim() || '(Sem Agente)',
+    cpf: String(cpfVal).trim() || '—',
+    regiao: String(regiaoVal).trim() || '(Sem Região)',
+    local: String(localVal).trim() || '(Sem Local)',
+    freqSemanal: String(freqSemanalVal).trim(),
     visitasSemanais,
     horasPorVisita,
     horasSemanais,

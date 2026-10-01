@@ -15,10 +15,9 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     }
   },
-  "include": ["src", "api", "vite.config.ts"]
+  "include": ["src", "api", "vite.config.ts", "server.ts"]
 }

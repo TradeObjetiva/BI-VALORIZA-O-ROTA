@@ -192,7 +192,55 @@ export function getRowVisitasSemanais(r: RawTradeRow): number {
   return n > 0 ? n : 1;
 }
 
+export const DAY_COLUMN_PATTERNS = [
+  { day: 'dom', aliases: ['DOM', 'DOMINGO', 'DOM.'] },
+  { day: 'seg', aliases: ['SEG', 'SEGUNDA', 'SEG.'] },
+  { day: 'ter', aliases: ['TER', 'TERCA', 'TERÇA', 'TER.'] },
+  { day: 'qua', aliases: ['QUA', 'QUARTA', 'QUA.'] },
+  { day: 'qui', aliases: ['QUI', 'QUINTA', 'QUI.'] },
+  { day: 'sex', aliases: ['SEX', 'SEXTA', 'SEX.'] },
+  { day: 'sab', aliases: ['SAB', 'SABADO', 'SÁBADO', 'SAB.'] },
+];
+
+/**
+ * Calculates total scheduled hours and active days from the day-of-week columns (DOM, SEG, TER, QUA, QUI, SEX, SAB).
+ */
+export function getRowHorasDosDias(r: RawTradeRow): {
+  totalHorasDias: number;
+  hasDayColumns: boolean;
+  diasAtivos: number;
+} {
+  let total = 0;
+  let hasDayColumns = false;
+  let diasAtivos = 0;
+
+  for (const { aliases } of DAY_COLUMN_PATTERNS) {
+    const val = findRowValue(r, aliases);
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      hasDayColumns = true;
+      const h = parseHours(val);
+      if (h > 0) {
+        total += h;
+        diasAtivos++;
+      }
+    }
+  }
+
+  return {
+    totalHorasDias: Math.round(total * 100) / 100,
+    hasDayColumns,
+    diasAtivos,
+  };
+}
+
 export function getRowHorasUnitarias(r: RawTradeRow): number {
+  // If day columns exist (DOM, SEG, TER, QUA, QUI, SEX, SAB):
+  const { totalHorasDias, hasDayColumns } = getRowHorasDosDias(r);
+  if (hasDayColumns && totalHorasDias > 0) {
+    const visitas = getRowVisitasSemanais(r);
+    return visitas > 0 ? Math.round((totalHorasDias / visitas) * 100) / 100 : totalHorasDias;
+  }
+
   const rawHours = findRowValue(r, [
     'HORAS DIARIAS',
     'HORA DIARIA',
@@ -223,7 +271,14 @@ export function getRowHorasUnitarias(r: RawTradeRow): number {
 }
 
 export function getRowHorasSemanais(r: RawTradeRow): number {
-  // If spreadsheet already has an explicit weekly hours column, respect it
+  // 1. If spreadsheet has columns for days of the week (DOM, SEG, TER, QUA, QUI, SEX, SAB):
+  // The weekly hours of this row is the sum of hours scheduled across the days of the week!
+  const { totalHorasDias, hasDayColumns } = getRowHorasDosDias(r);
+  if (hasDayColumns && totalHorasDias > 0) {
+    return totalHorasDias;
+  }
+
+  // 2. If spreadsheet already has an explicit weekly hours column, respect it
   const rawWeeklyHours = findRowValue(r, [
     'HORAS SEMANAIS',
     'HORA SEMANAL',
@@ -246,7 +301,7 @@ export function getRowHorasSemanais(r: RawTradeRow): number {
     }
   }
 
-  // Otherwise calculate: horas unitárias (diárias / por visita) * frequência semanal
+  // 3. Otherwise calculate: horas unitárias (diárias / por visita) * frequência semanal
   return Math.round(getRowHorasUnitarias(r) * getRowVisitasSemanais(r) * 100) / 100;
 }
 

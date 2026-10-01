@@ -39,17 +39,50 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           throw new Error('A planilha está vazia.');
         }
 
-        // Find header row
-        const headerIdx = json.findIndex(
-          (row) =>
-            Array.isArray(row) &&
-            row.some(
-              (cell) =>
-                cell !== null &&
-                cell !== undefined &&
-                String(cell).trim() !== ''
-            )
-        );
+        // Find header row: Look for the row with the strongest header signature (contains text labels like AGENTE, REDE, FORM, etc.)
+        let headerIdx = -1;
+        let maxHeaderScore = 0;
+
+        for (let r = 0; r < Math.min(json.length, 20); r++) {
+          const row = json[r];
+          if (!Array.isArray(row)) continue;
+
+          let score = 0;
+          row.forEach((cell) => {
+            if (cell !== null && cell !== undefined) {
+              const s = String(cell).trim().toUpperCase();
+              if (s.length > 0 && isNaN(Number(s))) {
+                score += 1;
+                if (
+                  ['AGENTE', 'PROMOTOR', 'REDE', 'LOCAL', 'FORM', 'REGIAO', 'VALOR', 'LIDER', 'FREQ', 'DOM', 'SEG', 'RAZAO'].some(
+                    (k) => s.includes(k)
+                  )
+                ) {
+                  score += 6;
+                }
+              }
+            }
+          });
+
+          if (score > maxHeaderScore) {
+            maxHeaderScore = score;
+            headerIdx = r;
+          }
+        }
+
+        // Fallback to first non-empty row if scoring found nothing
+        if (headerIdx === -1 || maxHeaderScore < 2) {
+          headerIdx = json.findIndex(
+            (row) =>
+              Array.isArray(row) &&
+              row.some(
+                (cell) =>
+                  cell !== null &&
+                  cell !== undefined &&
+                  String(cell).trim() !== ''
+              )
+          );
+        }
 
         if (headerIdx === -1) {
           throw new Error('Nenhum cabeçalho válido encontrado na planilha.');

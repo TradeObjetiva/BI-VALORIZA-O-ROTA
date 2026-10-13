@@ -6,13 +6,23 @@ export interface RawTradeRow {
   REGIAO?: string;
   LOCAL?: string;
   'RAZAO SOCIAL'?: string;
-  'FREQ. SEMANAL'?: string;
+  'FREQ. SEMANAL'?: string | number;
   'FREQUÊNCIA'?: string | number;
   'FREQUENCIA'?: string | number;
   'FREQUNCIA'?: string | number;
   'HORAS POR VISITA'?: string | number;
   'VALOR SEMANAL'?: string | number;
   VALOR?: string | number;
+  FILIAL?: string | number;
+  SEMANA?: string | number;
+  LIDER?: string;
+  DOM?: string | number;
+  SEG?: string | number;
+  TER?: string | number;
+  QUA?: string | number;
+  QUI?: string | number;
+  SEX?: string | number;
+  SAB?: string | number;
   [key: string]: any;
 }
 

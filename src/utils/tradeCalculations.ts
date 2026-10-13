@@ -10,7 +10,7 @@ import {
   SimulationConfig
 } from '../types/trade';
 
-export const MULTIPLIER = 52 / 12; // 4.3333333...
+export const MULTIPLIER = 4.334; // Base oficial da agência: 4,334 semanas por mês
 
 export function parseNum(val: any): number {
   if (val === null || val === undefined || val === '') return 0;
@@ -41,23 +41,62 @@ export function fmtNumber(v: number, decimals = 1): string {
   });
 }
 
-export function getRowVisitasSemanais(r: RawTradeRow): number {
-  const fs = String(r['FREQ. SEMANAL'] || '').toUpperCase();
-  if (fs.includes('15/15')) return 0.5;
-  if (fs.includes('5X')) return 5;
-  if (fs.includes('4X')) return 4;
-  if (fs.includes('3X')) return 3;
-  if (fs.includes('2X')) return 2;
-  if (fs.includes('1X')) return 1;
+/**
+ * Busca propriedade no objeto de forma flexível ignorando espaços nas bordas das chaves,
+ * maiúsculas/minúsculas e acentuação (ex: ' VALOR SEMANAL ' -> 'VALOR SEMANAL').
+ */
+export function getRawProp(r: RawTradeRow, ...keys: string[]): any {
+  if (!r || typeof r !== 'object') return undefined;
 
-  const freqVal =
-    r['FREQUÊNCIA'] ?? r['FREQUENCIA'] ?? r['FREQUNCIA'] ?? r['FREQU?NCIA'];
+  // 1. Acesso direto exato
+  for (const k of keys) {
+    if (r[k] !== undefined && r[k] !== null && r[k] !== '') return r[k];
+  }
+
+  // 2. Acesso normalizado limpando espaços nas bordas e acentos
+  const rKeys = Object.keys(r);
+  for (const target of keys) {
+    const normTarget = target.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (const rk of rKeys) {
+      const normRk = rk.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (normRk === normTarget && r[rk] !== undefined && r[rk] !== null && r[rk] !== '') {
+        return r[rk];
+      }
+    }
+  }
+
+  return undefined;
+}
+
+export function getRowVisitasSemanais(r: RawTradeRow): number {
+  const fsRaw = getRawProp(r, 'FREQ. SEMANAL', 'FREQUENCIA SEMANAL', 'FREQ');
+  const fs = String(fsRaw || '').toUpperCase().trim();
+  if (fs.includes('15/15')) return 0.5;
+  if (fs.includes('5X') || fs === '5') return 5;
+  if (fs.includes('4X') || fs === '4') return 4;
+  if (fs.includes('3X') || fs === '3') return 3;
+  if (fs.includes('2X') || fs === '2') return 2;
+  if (fs.includes('1X') || fs === '1') return 1;
+
+  const freqVal = getRawProp(r, 'FREQUÊNCIA', 'FREQUENCIA', 'FREQUNCIA', 'FREQ?NCIA');
   const n = parseNum(freqVal);
-  return n > 0 ? n : 1;
+  if (n > 0) return n;
+
+  const nFs = parseNum(fsRaw);
+  return nFs > 0 ? nFs : 1;
 }
 
 export function getRowHorasUnitarias(r: RawTradeRow): number {
-  const h = parseNum(r['HORAS POR VISITA']);
+  const h = parseNum(
+    getRawProp(
+      r,
+      'HORAS POR VISITA',
+      'Horas por Visita',
+      'HORAS/VISITA',
+      'HORAS',
+      'HORA'
+    )
+  );
   return h > 0 ? h : 1;
 }
 
@@ -66,9 +105,47 @@ export function getRowHorasSemanais(r: RawTradeRow): number {
 }
 
 export function getRowValorSemanal(r: RawTradeRow): number {
-  const vs = parseNum(r['VALOR SEMANAL']);
+  // 1. Procura primeiro colunas explícitas de valor semanal
+  const vs = parseNum(
+    getRawProp(
+      r,
+      'VALOR SEMANAL',
+      'VL SEMANAL',
+      'FATURAMENTO SEMANAL',
+      'TOTAL SEMANAL',
+      'VALOR SEMANA'
+    )
+  );
   if (vs > 0) return vs;
-  const vu = parseNum(r['VALOR']);
+
+  // 2. Se tiver valor mensal explícito na linha, calcula o semanal dividindo por 4.334
+  const vm = parseNum(
+    getRawProp(
+      r,
+      'VALOR MENSAL',
+      'VL MENSAL',
+      'FATURAMENTO MENSAL',
+      'TOTAL MENSAL',
+      'VALOR MES'
+    )
+  );
+  if (vm > 0) return vm / MULTIPLIER;
+
+  // 3. Fallback: valor unitário por visita multiplicado pelas visitas da semana
+  const vu = parseNum(
+    getRawProp(
+      r,
+      'VALOR',
+      'Custo Visita',
+      'CUSTO VISITA',
+      'Custo por Visita',
+      'VALOR TOTAL',
+      'VL TOTAL',
+      'VALOR COBRADO',
+      'VALOR UNITARIO',
+      'PREÇO UNITÁRIO'
+    )
+  );
   return vu * getRowVisitasSemanais(r);
 }
 
@@ -82,19 +159,86 @@ export function transformRawRow(r: RawTradeRow, idx: number): TradeRecord {
   const horasSemanais = getRowHorasSemanais(r);
   const horasMensais = horasSemanais * MULTIPLIER;
   const valorSemanal = getRowValorSemanal(r);
-  const valorUnitario = parseNum(r['VALOR']) || (visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0);
+  const valorUnitario =
+    parseNum(
+      getRawProp(
+        r,
+        'VALOR',
+        'Custo Visita',
+        'CUSTO VISITA',
+        'Custo por Visita',
+        'VALOR UNITARIO'
+      )
+    ) || (visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0);
   const vm = valorSemanal * MULTIPLIER;
   const custoPorVisita = visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0;
   const valorPorHora = horasSemanais > 0 ? valorSemanal / horasSemanais : 0;
 
+  const agente = String(
+    getRawProp(
+      r,
+      'AGENTE',
+      'PROMOTOR',
+      'NOME',
+      'COLABORADOR',
+      'NOME DO PROMOTOR',
+      'AGENTE DE VENDAS',
+      'FUNCIONARIO'
+    ) || ''
+  ).trim() || '(Sem Agente)';
+
+  const cpf = String(
+    getRawProp(r, 'CPF', 'CPF DO AGENTE', 'CPF PROMOTOR', 'DOCUMENTO') || ''
+  ).trim() || '—';
+
+  const form = String(
+    getRawProp(
+      r,
+      'FORM',
+      'ATIVIDADE',
+      'PESQUISA',
+      'FORMULARIO',
+      'CATEGORIA',
+      'PROJETO'
+    ) || ''
+  ).trim() || '(Sem Formulário)';
+
+  const rede = String(
+    getRawProp(r, 'REDE', 'CLIENTE', 'BANDEIRA') || ''
+  ).trim() || '(Sem Rede)';
+
+  const regiao = String(
+    getRawProp(
+      r,
+      'REGIAO',
+      'MUNICÍPIO',
+      'MUNICIPIO',
+      'CIDADE',
+      'ESTADO',
+      'UF',
+      'REGIONAL'
+    ) || ''
+  ).trim() || '(Sem Região)';
+
+  const local = String(
+    getRawProp(
+      r,
+      'LOCAL',
+      'RAZAO SOCIAL',
+      'LOJA',
+      'PONTO DE VENDA',
+      'PDV'
+    ) || ''
+  ).trim() || '(Sem Local)';
+
   return {
     id: `rec-${idx}-${Math.random().toString(36).substring(2, 7)}`,
-    form: String(r['FORM'] || '').trim() || '(Sem Formulário)',
-    rede: String(r['REDE'] || '').trim() || '(Sem Rede)',
-    agente: String(r['AGENTE'] || '').trim() || '(Sem Agente)',
-    cpf: String(r['CPF'] || '').trim() || '—',
-    regiao: String(r['REGIAO'] || '').trim() || '(Sem Região)',
-    local: String(r['LOCAL'] || r['RAZAO SOCIAL'] || '').trim() || '(Sem Local)',
+    form,
+    rede,
+    agente,
+    cpf,
+    regiao,
+    local,
     freqSemanal: String(r['FREQ. SEMANAL'] || `${visitasSemanais}X`).trim(),
     visitasSemanais,
     horasPorVisita,
@@ -153,7 +297,6 @@ export function calculateKPIs(records: TradeRecord[]): KPIData {
   const formsSet = new Set<string>();
 
   let valorSemanalTotal = 0;
-  let valorMensalTotal = 0;
   let totalVisitasSemanais = 0;
   let totalHorasSemanais = 0;
 
@@ -165,20 +308,22 @@ export function calculateKPIs(records: TradeRecord[]): KPIData {
     if (r.agente && r.agente !== '(Sem Agente)') {
       agentesSet.add(r.agente);
       agentHoursMap[r.agente] = (agentHoursMap[r.agente] || 0) + r.horasSemanais;
-      agentValMap[r.agente] = (agentValMap[r.agente] || 0) + r.valorMensal;
+      agentValMap[r.agente] = (agentValMap[r.agente] || 0) + (r.valorSemanal * MULTIPLIER);
       if (!agentRedeMap[r.agente]) agentRedeMap[r.agente] = {};
       agentRedeMap[r.agente][r.rede] =
-        (agentRedeMap[r.agente][r.rede] || 0) + r.valorMensal;
+        (agentRedeMap[r.agente][r.rede] || 0) + (r.valorSemanal * MULTIPLIER);
     }
     if (r.local && r.local !== '(Sem Local)') locaisSet.add(r.local);
     if (r.rede && r.rede !== '(Sem Rede)') redesSet.add(r.rede);
     if (r.form && r.form !== '(Sem Formulário)') formsSet.add(r.form);
 
     valorSemanalTotal += r.valorSemanal;
-    valorMensalTotal += r.valorMensal;
     totalVisitasSemanais += r.visitasSemanais;
     totalHorasSemanais += r.horasSemanais;
   });
+
+  // Base oficial: 4,334 semanas * Valor Semanal Total
+  const valorMensalTotal = valorSemanalTotal * MULTIPLIER;
 
   const agentesAtivos = agentesSet.size;
   const locaisUnicos = locaisSet.size;
@@ -243,11 +388,15 @@ export function calculateRedeAnalysis(records: TradeRecord[]): RedeMetrics[] {
         agentes: new Set(),
       };
     }
-    map[rd].value += r.valorMensal;
     map[rd].valorSem += r.valorSemanal;
     map[rd].visitasSem += r.visitasSemanais;
     if (r.local) map[rd].locais.add(r.local);
     if (r.agente) map[rd].agentes.add(r.agente);
+  });
+
+  // Base oficial: 4,334 * valorSem
+  Object.values(map).forEach((d) => {
+    d.value = d.valorSem * MULTIPLIER;
   });
 
   const total = Object.values(map).reduce((s, v) => s + v.value, 0);
@@ -269,17 +418,22 @@ export function calculateRedeAnalysis(records: TradeRecord[]): RedeMetrics[] {
 export function calculateRegiaoAnalysis(records: TradeRecord[]): RegiaoMetrics[] {
   const map: Record<
     string,
-    { value: number; locais: Set<string>; agentes: Set<string> }
+    { value: number; valorSem: number; locais: Set<string>; agentes: Set<string> }
   > = {};
 
   records.forEach((r) => {
     const reg = r.regiao || '(Sem Região)';
     if (!map[reg]) {
-      map[reg] = { value: 0, locais: new Set(), agentes: new Set() };
+      map[reg] = { value: 0, valorSem: 0, locais: new Set(), agentes: new Set() };
     }
-    map[reg].value += r.valorMensal;
+    map[reg].valorSem += r.valorSemanal;
     if (r.local) map[reg].locais.add(r.local);
     if (r.agente) map[reg].agentes.add(r.agente);
+  });
+
+  // Base oficial: 4,334 * valorSem
+  Object.values(map).forEach((d) => {
+    d.value = d.valorSem * MULTIPLIER;
   });
 
   const total = Object.values(map).reduce((s, v) => s + v.value, 0);
@@ -296,15 +450,20 @@ export function calculateRegiaoAnalysis(records: TradeRecord[]): RegiaoMetrics[]
 }
 
 export function calculateFormAnalysis(records: TradeRecord[]): FormMetrics[] {
-  const map: Record<string, { value: number; locais: Set<string> }> = {};
+  const map: Record<string, { value: number; valorSem: number; locais: Set<string> }> = {};
 
   records.forEach((r) => {
     const form = r.form || '(Sem Formulário)';
     if (!map[form]) {
-      map[form] = { value: 0, locais: new Set() };
+      map[form] = { value: 0, valorSem: 0, locais: new Set() };
     }
-    map[form].value += r.valorMensal;
+    map[form].valorSem += r.valorSemanal;
     if (r.local) map[form].locais.add(r.local);
+  });
+
+  // Base oficial: 4,334 * valorSem
+  Object.values(map).forEach((d) => {
+    d.value = d.valorSem * MULTIPLIER;
   });
 
   const total = Object.values(map).reduce((s, v) => s + v.value, 0);
@@ -336,8 +495,7 @@ export function calculateAgentAnalysis(records: TradeRecord[]): AgentMetrics[] {
   > = {};
 
   records.forEach((r) => {
-    const ag = r.agente;
-    if (!ag || ag === '(Sem Agente)') return;
+    const ag = (r.agente && r.agente.trim()) ? r.agente.trim() : '(Sem Agente Atribuído)';
     if (!map[ag]) {
       map[ag] = {
         nome: ag,
@@ -351,12 +509,16 @@ export function calculateAgentAnalysis(records: TradeRecord[]): AgentMetrics[] {
         horasSemanais: 0,
       };
     }
-    map[ag].valor += r.valorMensal;
     map[ag].valorSemanal += r.valorSemanal;
     if (r.local) map[ag].locaisSet.add(r.local);
     if (r.form) map[ag].formsSet.add(r.form);
     map[ag].horasSemanais += r.horasSemanais;
-    map[ag].redesMap[r.rede] = (map[ag].redesMap[r.rede] || 0) + r.valorMensal;
+    map[ag].redesMap[r.rede] = (map[ag].redesMap[r.rede] || 0) + (r.valorSemanal * MULTIPLIER);
+  });
+
+  // Base oficial: Faturamento Mensal do Promotor = a.valorSemanal * 4.334
+  Object.values(map).forEach((a) => {
+    a.valor = a.valorSemanal * MULTIPLIER;
   });
 
   const totalGeral = Object.values(map).reduce((s, a) => s + a.valor, 0);

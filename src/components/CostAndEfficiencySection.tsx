@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { DollarSign, Clock, TrendingUp, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { RedeMetrics, AgentMetrics } from '../types/trade';
-import { fmt } from '../utils/tradeCalculations';
+import { fmt, MULTIPLIER } from '../utils/tradeCalculations';
 import { SortableTh, SortDir, compareValues, toggleSort } from './SortableTh';
 
 interface CostAndEfficiencySectionProps {
@@ -57,7 +57,10 @@ export const CostAndEfficiencySection: React.FC<CostAndEfficiencySectionProps> =
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
       {/* Bloco 2.3: Custo por Visita Realizada */}
-      <div className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col">
+      <div
+        data-print-id="custoVisita"
+        className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col"
+      >
         {/* Header */}
         <div className="p-4 px-5 bg-[#1a1a24] border-b border-[#242434] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -171,7 +174,7 @@ export const CostAndEfficiencySection: React.FC<CostAndEfficiencySectionProps> =
       </div>
 
       {/* Bloco 1.3 & 2.4: Eficiência de Horas */}
-      <div className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col">
+      <div className="print-screen-only bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col">
         {/* Header */}
         <div className="p-4 px-5 bg-[#1a1a24] border-b border-[#242434] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -186,7 +189,7 @@ export const CostAndEfficiencySection: React.FC<CostAndEfficiencySectionProps> =
         </div>
 
         <div className="px-5 py-2.5 text-xs text-[#9090aa] bg-[#121218] border-b border-[#20202c]">
-          Fórmula: <code className="text-[#a78bfa] font-mono">Valor Mensal ÷ Horas Mensais</code> (Horas por visita × Frequência × 52/12):
+          Fórmula: <code className="text-[#a78bfa] font-mono">Valor Mensal ÷ Horas Mensais</code> (Horas por visita × Frequência × 4,334):
         </div>
 
         <div className="p-5 flex-1 flex flex-col justify-around gap-4">
@@ -259,7 +262,7 @@ export const CostAndEfficiencySection: React.FC<CostAndEfficiencySectionProps> =
             Carga Total: <strong className="text-white">{totalHorasSemanais.toFixed(0)}h/sem</strong>
           </span>
           <span>
-            Mês (52/12): <strong className="text-[#60a5fa]">{(totalHorasSemanais * (52 / 12)).toFixed(0)}h</strong>
+            Mês (4,334x): <strong className="text-[#60a5fa]">{(totalHorasSemanais * MULTIPLIER).toFixed(0)}h</strong>
           </span>
         </div>
       </div>

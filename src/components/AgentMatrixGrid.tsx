@@ -38,7 +38,10 @@ export const AgentMatrixGrid: React.FC<AgentMatrixGridProps> = ({ matrixData }) 
   }, [agents, topRedes, metric]);
 
   return (
-    <div className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg mb-6 flex flex-col">
+    <div
+      data-print-id="matriz"
+      className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg mb-6 flex flex-col"
+    >
       {/* Header */}
       <div className="p-4 px-5 bg-[#1a1a24] border-b border-[#242434] flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2">

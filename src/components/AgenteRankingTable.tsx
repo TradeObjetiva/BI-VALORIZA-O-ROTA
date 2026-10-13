@@ -9,7 +9,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { AgentMetrics } from '../types/trade';
-import { fmt } from '../utils/tradeCalculations';
+import { fmt, MULTIPLIER } from '../utils/tradeCalculations';
 import { SortableTh, SortDir, compareValues, toggleSort } from './SortableTh';
 
 interface AgenteRankingTableProps {
@@ -67,11 +67,15 @@ export const AgenteRankingTable: React.FC<AgenteRankingTableProps> = ({
   const totalHorasGeral = agentsData.reduce((s, a) => s + a.horasSemanais, 0);
   const mediaHoraGeral =
     totalHorasGeral > 0
-      ? totalValorMensal / (totalHorasGeral * (52 / 12))
+      ? totalValorMensal / (totalHorasGeral * MULTIPLIER)
       : 0;
+  const totalTabelaValor = filteredAndSortedAgents.reduce((s, a) => s + a.valor, 0);
 
   return (
-    <div className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg mb-6 flex flex-col">
+    <div
+      data-print-id="agentes"
+      className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg mb-6 flex flex-col"
+    >
       {/* Header */}
       <div className="p-4 px-5 bg-[#1a1a24] border-b border-[#242434] flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -243,7 +247,7 @@ export const AgenteRankingTable: React.FC<AgenteRankingTableProps> = ({
                 align="right"
               />
               <SortableTh
-                label="Valor Mensal"
+                label="Faturamento Mensal (4,334x)"
                 column="valor"
                 sortKey={sortField}
                 sortDir={sortDir}
@@ -372,7 +376,7 @@ export const AgenteRankingTable: React.FC<AgenteRankingTableProps> = ({
                 100%
               </td>
               <td className="py-3 px-4 text-right font-bold font-mono text-[#00d4aa]">
-                {fmt(totalValorMensal)}
+                {fmt(totalTabelaValor)}
               </td>
             </tr>
           </tfoot>

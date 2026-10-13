@@ -25,7 +25,7 @@ export const KPISection: React.FC<KPISectionProps> = ({ kpis, isSimulated }) => 
       id: 'valor-mensal',
       label: 'Valor Mensal Total',
       value: fmt(kpis.valorMensalTotal),
-      sub: 'Base: semanal × 52/12',
+      sub: 'Base: semanal × 4,334 semanas',
       icon: DollarSign,
       color: 'from-[#6c63ff] to-[#8b5cf6]',
       textAccent: 'text-[#a78bfa]',

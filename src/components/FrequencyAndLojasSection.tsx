@@ -91,7 +91,10 @@ export const FrequencyAndLojasSection: React.FC<FrequencyAndLojasSectionProps> =
   return (
     <div className="space-y-6 mb-6">
       {/* 1. Distribuição de Lojas por Qtd de Formulários */}
-      <div className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col">
+      <div
+        data-print-id="lojasForms"
+        className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col"
+      >
         <div className="p-4 px-5 bg-[#1a1a24] border-b border-[#242434] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-[#00d4aa]" />
@@ -204,7 +207,10 @@ export const FrequencyAndLojasSection: React.FC<FrequencyAndLojasSectionProps> =
       </div>
 
       {/* 2. Formulários × Frequência Semanal */}
-      <div className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col">
+      <div
+        data-print-id="freqMarca"
+        className="bg-[#14141c] border border-[#242434] rounded-2xl overflow-hidden shadow-lg flex flex-col"
+      >
         <div className="p-4 px-5 bg-[#1a1a24] border-b border-[#242434] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-[#ffd166]" />

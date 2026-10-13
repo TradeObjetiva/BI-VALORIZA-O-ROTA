@@ -27,15 +27,35 @@
   background: #6c63ff;
 }
 
+.print-only {
+  display: none !important;
+}
+
+.print-screen-only {
+  /* hidden only when printing */
+}
+
 /* Print Styles */
 @media print {
   header,
-  button,
-  input,
-  select,
   footer,
+  .print-screen-only,
   #ai-advisor-section {
     display: none !important;
+  }
+
+  body[data-print-mode='selection'] [data-print-id]:not(.print-include) {
+    display: none !important;
+  }
+
+  body[data-print-mode='selection'] .print-only.print-include {
+    display: block !important;
+  }
+
+  .overflow-y-auto,
+  .overflow-x-auto {
+    overflow: visible !important;
+    max-height: none !important;
   }
 
   body {

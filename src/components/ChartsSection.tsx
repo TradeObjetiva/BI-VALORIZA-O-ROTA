@@ -15,8 +15,8 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({
   const topRegioes = regioesData.slice(0, 6);
   const totalRegioesVal = regioesData.reduce((s, r) => s + r.value, 0);
 
-  const topForms = formsData.slice(0, 7);
-  const maxFormVal = topForms[0]?.value || 1;
+  const allForms = formsData;
+  const maxFormVal = allForms[0]?.value || 1;
 
   const regiaoColors = [
     '#6c63ff',
@@ -102,15 +102,17 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-[#00d4aa]" />
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-              Top Marcas / Formulários por Faturamento
+              Marcas / Formulários por Faturamento
             </h3>
           </div>
-          <span className="text-[11px] text-[#9090aa]">Ranking de Marcas</span>
+          <span className="text-[11px] text-[#9090aa] font-medium">
+            Ranking Completo ({allForms.length} marcas)
+          </span>
         </div>
 
-        {/* Horizontal Bars */}
-        <div className="py-3 space-y-2.5">
-          {topForms.map((form, i) => {
+        {/* Horizontal Bars com rolagem vertical */}
+        <div className="py-3 space-y-2.5 max-h-[340px] overflow-y-auto pr-2">
+          {allForms.map((form, i) => {
             const shortName = form.label.replace(/PESQUISA /i, '');
             const pctBar = (form.value / maxFormVal) * 100;
 
@@ -137,8 +139,9 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({
           })}
         </div>
 
-        <div className="pt-2 text-[11px] text-[#5a5a75] text-right">
-          Exibindo as <strong>{topForms.length}</strong> maiores marcas da carteira
+        <div className="pt-2 text-[11px] text-[#5a5a75] flex items-center justify-between border-t border-[#242434]/40 mt-1">
+          <span>Role para visualizar todas</span>
+          <span>Exibindo todas as <strong className="text-white">{allForms.length}</strong> marcas</span>
         </div>
       </div>
     </div>

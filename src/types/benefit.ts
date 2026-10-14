@@ -107,6 +107,8 @@ export interface ConfrontoRecord {
   taxaAdm?: number;
   premiacao?: number;
   tributos: number;
+  subtotalDiversos?: number;
+  epiSeguro?: number;
   custoRh: number; // Custo RH (Folha + Encargos + Benefícios Caju + Taxas + Tributos + Premiação)
   custoTotalMensal: number; // Custo Total = Custo RH + VT Real
   custoPorHora: number;

@@ -131,7 +131,7 @@ export const BenefitDashboard: React.FC<BenefitDashboardProps> = ({
       CPF: r.cpf,
       Função: r.funcao,
       'Salário Base': r.salarioBase,
-      'Encargos (60,25%)': r.salarioComEncargos - r.salarioBase,
+      'Encargos (68,25%)': r.salarioComEncargos - r.salarioBase,
       'Salário + Encargos': r.salarioComEncargos,
       'VT Total': r.vtTotal,
       'VR Caju': r.vrTotal,
@@ -215,7 +215,7 @@ export const BenefitDashboard: React.FC<BenefitDashboardProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Encargos Trabalhistas (60,25%) */}
+        {/* Card 3: Encargos Trabalhistas (68,25%) */}
         <div className="p-5 rounded-2xl bg-[#15151e] border border-[#2a2a3c] shadow-lg relative overflow-hidden group hover:border-[#ffd166]/50 transition">
           <div className="flex items-center justify-between text-xs text-[#9090aa] mb-2 font-semibold">
             <span>ENCARGOS TRABALHISTAS</span>
@@ -309,7 +309,7 @@ export const BenefitDashboard: React.FC<BenefitDashboardProps> = ({
             <div className="space-y-3">
               {[
                 { label: 'Folha Salarial Base', val: benefitKPIs.folhaSalarialBase, pct: (benefitKPIs.folhaSalarialBase / benefitKPIs.custoTotalOperacional) * 100, color: '#00d4aa' },
-                { label: 'Encargos Sociais (60,25%)', val: benefitKPIs.encargosTrabalhistas, pct: (benefitKPIs.encargosTrabalhistas / benefitKPIs.custoTotalOperacional) * 100, color: '#ffd166' },
+                { label: 'Encargos Sociais (68,25%)', val: benefitKPIs.encargosTrabalhistas, pct: (benefitKPIs.encargosTrabalhistas / benefitKPIs.custoTotalOperacional) * 100, color: '#ffd166' },
                 { label: 'Subtotal Diversos (Ferramentas)', val: benefitKPIs.totalDiversos, pct: (benefitKPIs.totalDiversos / benefitKPIs.custoTotalOperacional) * 100, color: '#6c63ff' },
                 { label: 'Tributos Fiscais (19,86%)', val: benefitKPIs.totalTributos, pct: (benefitKPIs.totalTributos / benefitKPIs.custoTotalOperacional) * 100, color: '#f72585' },
                 { label: 'Taxa de Supervisão (Fee 25%)', val: benefitKPIs.totalTaxaSupervisao, pct: (benefitKPIs.totalTaxaSupervisao / benefitKPIs.custoTotalOperacional) * 100, color: '#4cc9f0' },

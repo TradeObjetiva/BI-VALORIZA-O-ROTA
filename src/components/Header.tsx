@@ -25,7 +25,6 @@ interface HeaderProps {
   onOpenIdeas: () => void;
   onToggleSimulator: () => void;
   isSimulatorOpen: boolean;
-  onOpenAIModal: () => void;
   onOpenBasesModal: () => void;
   onExportExcel: () => void;
   onPrintPDF: () => void;
@@ -44,7 +43,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenIdeas,
   onToggleSimulator,
   isSimulatorOpen,
-  onOpenAIModal,
   onOpenBasesModal,
   onExportExcel,
   onPrintPDF,
@@ -176,17 +174,6 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Simulador</span>
-            </button>
-          )}
-
-          {/* AI Advisor Button (Modo Valorização) */}
-          {currentMode === 'valorizacao' && (
-            <button
-              onClick={onOpenAIModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-[#6c63ff]/25 to-[#00d4aa]/20 border border-[#6c63ff]/50 text-white hover:from-[#6c63ff]/40 hover:to-[#00d4aa]/30 transition shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#00d4aa]" />
-              <span className="hidden sm:inline">IA Parecer</span>
             </button>
           )}
 

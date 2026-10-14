@@ -22,6 +22,10 @@ import {
   ChevronDown,
   ChevronUp,
   Link2,
+  Info,
+  X,
+  Receipt,
+  Layers,
 } from 'lucide-react';
 import { ConfrontoRecord, ConfrontoKPIData } from '../types/benefit';
 import { fmt, fmtNumber } from '../utils/tradeCalculations';
@@ -47,10 +51,108 @@ export const ConfrontoDashboard: React.FC<ConfrontoDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<'todos' | 'lucro' | 'alerta' | 'prejuizo'>('todos');
   const [conciliacaoFilter, setConciliacaoFilter] = useState<'todos' | 'conciliados' | 'apenas_custo' | 'apenas_rota'>('todos');
   const [showAuditoriaDrawer, setShowAuditoriaDrawer] = useState(false);
+  const [showCustoRhModal, setShowCustoRhModal] = useState(false);
   const [sortField, setSortField] = useState<keyof ConfrontoRecord>('margemContribuicao');
   const [sortAsc, setSortAsc] = useState(false);
 
   const activeKPIs = confrontoKPIs;
+
+  // Decomposição analítica oficial do Custo RH
+  const custoRhBreakdown = useMemo(() => {
+    let salarioBase = 0;
+    let encargos = 0;
+    let beneficiosCaju = 0;
+    let subtotalDiversos = 0;
+    let taxaSupervisao = 0;
+    let taxaAdm = 0;
+    let tributos = 0;
+    let premiacao = 0;
+
+    confrontoRecords.forEach((r) => {
+      salarioBase += r.salarioBase || 0;
+      encargos += r.encargos || 0;
+      beneficiosCaju += r.beneficiosCaju || 0;
+      subtotalDiversos += r.subtotalDiversos || 0;
+      taxaSupervisao += r.taxaSupervisao || 0;
+      taxaAdm += r.taxaAdm || 0;
+      tributos += r.tributos || 0;
+      premiacao += r.premiacao || 0;
+    });
+
+    const totalCustoRh = activeKPIs.custoRhTotal;
+
+    const items = [
+      {
+        id: 'salario',
+        nome: 'Salário Base (CLT)',
+        coluna: 'Coluna SALÁRIO / SALÁRIO BASE',
+        valor: salarioBase,
+        cor: '#a78bfa',
+        descricao: 'Remuneração base contratual dos promotores de vendas',
+      },
+      {
+        id: 'encargos',
+        nome: 'Encargos Trabalhistas Provisionados (68,25%)',
+        coluna: 'Custos Trabalhistas / Provisões',
+        valor: encargos,
+        cor: '#818cf8',
+        descricao: 'FGTS (8%), INSS Patronal (28,8%), 13º salário e férias proporcionais + 1/3 constitucional',
+      },
+      {
+        id: 'caju',
+        nome: 'Benefícios Flexíveis Caju',
+        coluna: 'Total Benefícios Caju (VR + Celular + Cesta)',
+        valor: beneficiosCaju,
+        cor: '#00d4aa',
+        descricao: 'Vale Refeição / Alimentação, Auxílio Conectividade (Celular) e Cesta Básica via Cartão Caju',
+      },
+      {
+        id: 'supervisao',
+        nome: 'Taxa de Supervisão Operacional',
+        coluna: 'Coluna TAXA SUPERVISÃO',
+        valor: taxaSupervisao,
+        cor: '#38bdf8',
+        descricao: 'Coordenação operacional, liderança de campo e acompanhamento de rota',
+      },
+      {
+        id: 'tributos',
+        nome: 'Tributos Fiscais & Impostos',
+        coluna: 'Coluna TRIBUTOS',
+        valor: tributos,
+        cor: '#ffd166',
+        descricao: 'Impostos sobre faturamento e operação (ISS, PIS, COFINS sobre prestação de serviços)',
+      },
+      {
+        id: 'adm',
+        nome: 'Taxa Administrativa (Fee)',
+        coluna: 'Coluna TAXA ADM',
+        valor: taxaAdm,
+        cor: '#f472b6',
+        descricao: 'Fee de gestão e sustentação de retaguarda da agência',
+      },
+      {
+        id: 'diversos',
+        nome: 'Saúde, Segurança & Tecnologia (Diversos)',
+        coluna: 'EPI, Seguro, ASO, PGR, Mob2con',
+        valor: subtotalDiversos,
+        cor: '#fb923c',
+        descricao: 'Equipamentos de Proteção, Exames Médicos Ocupacionais (ASO), PGR e licenças de software de campo',
+      },
+      {
+        id: 'premiacao',
+        nome: 'Premiação Operacional',
+        coluna: 'Coluna PREMIAÇÃO',
+        valor: premiacao,
+        cor: '#34d399',
+        descricao: 'Incentivos variáveis por metas de execução e assiduidade em loja',
+      },
+    ];
+
+    return {
+      items,
+      totalCustoRh,
+    };
+  }, [confrontoRecords, activeKPIs.custoRhTotal]);
 
   // Filtros aplicados
   const filteredRecords = useMemo(() => {
@@ -141,7 +243,7 @@ export const ConfrontoDashboard: React.FC<ConfrontoDashboardProps> = ({
             Margem Real de Contribuição por Promotor
           </h2>
           <p className="text-xs text-[#9090aa] max-w-2xl leading-relaxed">
-            Cruzamento automatizado da <strong>Receita Comercial de Rotas</strong> com o <strong>Custo Real de RH</strong> (Salário + 60,25% Encargos + VT Multimodal + Benefícios Caju + 25% Fee + Impostos).
+            Cruzamento automatizado da <strong>Receita Comercial de Rotas</strong> com o <strong>Custo Real de RH</strong> (Salário + 68,25% Encargos + VT Multimodal + Benefícios Caju + 25% Fee + Impostos).
           </p>
         </div>
 
@@ -399,16 +501,26 @@ export const ConfrontoDashboard: React.FC<ConfrontoDashboardProps> = ({
         </div>
 
         {/* KPI 2: Custo RH */}
-        <div className="p-5 rounded-2xl bg-[#15151e] border border-[#2a2a3c] shadow-lg relative overflow-hidden group">
+        <div
+          onClick={() => setShowCustoRhModal(true)}
+          className="p-5 rounded-2xl bg-[#15151e] border border-[#2a2a3c] shadow-lg relative overflow-hidden group cursor-pointer hover:border-[#a78bfa]/60 hover:shadow-[#a78bfa]/10 transition-all"
+          title="Clique para ver o detalhamento exato de todas as colunas que compõem o Custo RH"
+        >
           <div className="flex items-center justify-between text-xs text-[#9090aa] mb-2 font-semibold">
-            <span>CUSTO RH (FOLHA & BENEFÍCIOS)</span>
-            <ArrowDownRight className="w-4 h-4 text-[#a78bfa]" />
+            <span className="flex items-center gap-1.5">
+              <span>CUSTO RH (FOLHA & BENEFÍCIOS)</span>
+              <Info className="w-3.5 h-3.5 text-[#a78bfa] opacity-70 group-hover:opacity-100 transition" />
+            </span>
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#6c63ff]/20 text-[#a78bfa] border border-[#6c63ff]/30 group-hover:bg-[#6c63ff]/30 transition">
+              Ver Detalhes 🔍
+            </span>
           </div>
           <div className="text-2xl font-black text-[#a78bfa] tracking-tight">
             {fmt(activeKPIs.custoRhTotal)}
           </div>
-          <div className="text-[11px] text-[#9090aa] mt-2 font-medium">
-            Salário, 60,25%, Caju, Fee, Tributos
+          <div className="text-[11px] text-[#9090aa] mt-2 font-medium flex items-center justify-between">
+            <span>Salário, 68,25%, Caju, Fee, Tributos</span>
+            <span className="text-[10px] text-[#a78bfa] font-semibold underline underline-offset-2">Clique p/ abrir</span>
           </div>
         </div>
 
@@ -641,7 +753,14 @@ export const ConfrontoDashboard: React.FC<ConfrontoDashboardProps> = ({
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-3 text-right font-semibold text-[#a78bfa] font-mono">{fmt(r.custoRh)}</td>
+                  <td
+                    className="py-2.5 px-3 text-right font-semibold text-[#a78bfa] font-mono"
+                    title={`Composição do Promotor:\n• Salário Base: ${fmt(r.salarioBase || 0)}\n• Encargos 68,25%: ${fmt(r.encargos || 0)}\n• Benefícios Caju: ${fmt(r.beneficiosCaju || 0)}\n• Taxa Supervisão: ${fmt(r.taxaSupervisao || 0)}\n• Tributos: ${fmt(r.tributos || 0)}\n• Outros/Fee: ${fmt((r.taxaAdm || 0) + (r.premiacao || 0) + (r.subtotalDiversos || 0))}\n= Total Custo RH: ${fmt(r.custoRh)}`}
+                  >
+                    <span className="border-b border-dashed border-[#a78bfa]/40 hover:border-[#a78bfa] cursor-help">
+                      {fmt(r.custoRh)}
+                    </span>
+                  </td>
                   <td className="py-2.5 px-3 text-right font-semibold text-[#ff6b6b] font-mono">{fmt(r.vtTotal)}</td>
                   <td className="py-2.5 px-3 text-right font-bold text-white bg-white/5 font-mono">{fmt(r.custoTotalMensal)}</td>
                   <td className="py-2.5 px-4 text-right font-black font-mono">
@@ -709,6 +828,123 @@ export const ConfrontoDashboard: React.FC<ConfrontoDashboardProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Modal de Detalhamento do Custo RH */}
+      {showCustoRhModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl bg-[#14141c] border border-[#2e2e42] rounded-3xl shadow-2xl p-6 md:p-8 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-[#242434]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#6c63ff]/20 border border-[#6c63ff]/40 flex items-center justify-center text-[#a78bfa]">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base md:text-lg font-bold text-white">
+                    Detalhamento Oficial do Custo RH (Folha & Benefícios)
+                  </h3>
+                  <p className="text-xs text-[#9090aa] mt-0.5">
+                    Memória analítica de todas as colunas somadas da Planilha de Custo Operacional
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCustoRhModal(false)}
+                className="p-2 text-[#9090aa] hover:text-white rounded-xl bg-[#1e1e2c] hover:bg-[#252538] transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Total Card */}
+            <div className="mt-5 p-4 rounded-2xl bg-gradient-to-r from-[#1e1b38] to-[#161624] border border-[#6c63ff]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-bold text-[#a78bfa] uppercase tracking-wider">
+                  Total Geral Custo RH da Operação
+                </span>
+                <div className="text-3xl font-black text-white mt-0.5">
+                  {fmt(custoRhBreakdown.totalCustoRh)}
+                </div>
+                <div className="text-[11px] text-[#9090aa] mt-1">
+                  Somatório de {confrontoRecords.filter((r) => r.matchedCusto).length} colaboradores ativos
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-[#121218] border border-[#242434] text-right shrink-0">
+                <div className="text-[10px] text-[#9090aa] uppercase font-bold">O que NÃO entra aqui?</div>
+                <div className="text-xs font-semibold text-[#ff6b6b] mt-0.5">
+                  VT Real: {fmt(activeKPIs.vtRealTotal)}
+                </div>
+                <div className="text-[9px] text-[#5a5a75] mt-0.5">Apartado no card vizinho</div>
+              </div>
+            </div>
+
+            {/* Lista Detalhada das Colunas Somadas */}
+            <div className="mt-5 space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Colunas e Rubricas Somadas (8 Componentes)
+              </h4>
+
+              <div className="space-y-2.5">
+                {custoRhBreakdown.items.map((item, idx) => {
+                  const pct = custoRhBreakdown.totalCustoRh > 0 ? (item.valor / custoRhBreakdown.totalCustoRh) * 100 : 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3.5 rounded-xl bg-[#181824] border border-[#242434] hover:border-[#6c63ff]/40 transition space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold text-white">
+                              {idx + 1}. {item.nome}
+                            </span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1e1e2c] text-[#a78bfa] border border-[#2a2a3e]">
+                              {item.coluna}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#9090aa] mt-0.5 leading-relaxed">
+                            {item.descricao}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-bold font-mono text-white">
+                            {fmt(item.valor)}
+                          </div>
+                          <div className="text-[10px] text-[#a78bfa] font-mono">
+                            {pct.toFixed(1)}% do Custo RH
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Barra de Progresso Visual */}
+                      <div className="w-full h-1.5 rounded-full bg-[#121218] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: item.cor,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Rodapé Explicativo */}
+            <div className="mt-6 p-4 rounded-xl bg-[#121218] border border-[#242434] text-xs text-[#9090aa] space-y-1">
+              <div className="font-semibold text-white flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-[#00d4aa]" />
+                Regra DRE de Fechamento:
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                <strong className="text-white">Custo Total = Custo RH + VT Real (Logística)</strong>. O Vale Transporte não entra na base de cálculo de encargos trabalhistas nem de taxas operacionais, por isso é apartado no card <span className="text-[#ff6b6b] font-semibold">VT REAL</span>, permitindo à diretoria apurar com precisão a margem de contribuição de cada rota.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

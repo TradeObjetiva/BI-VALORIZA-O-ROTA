@@ -202,6 +202,7 @@ export function getRowVisitasSemanais(r: RawTradeRow): number {
   return n > 0 ? n : 1;
 }
 
+// Padrões de identificação de colunas por dia da semana
 export const DAY_COLUMN_PATTERNS = [
   { day: 'dom', aliases: ['DOM', 'DOMINGO', 'DOM.'] },
   { day: 'seg', aliases: ['SEG', 'SEGUNDA', 'SEG.'] },

@@ -11,7 +11,6 @@ import { RedeRegiaoTables } from './components/RedeRegiaoTables';
 import { AgenteRankingTable } from './components/AgenteRankingTable';
 import { AgentMatrixGrid } from './components/AgentMatrixGrid';
 import { FrequencyAndLojasSection } from './components/FrequencyAndLojasSection';
-import { AIAssistantSection } from './components/AIAssistantSection';
 import { IdeasRoadmapModal } from './components/IdeasRoadmapModal';
 import { SavedBasesModal } from './components/SavedBasesModal';
 import { ExportPickerModal } from './components/ExportPickerModal';
@@ -376,10 +375,6 @@ export default function App() {
         onOpenIdeas={() => setIsIdeasModalOpen(true)}
         onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
         isSimulatorOpen={isSimulatorOpen}
-        onOpenAIModal={() => {
-          const el = document.getElementById('ai-advisor-section');
-          el?.scrollIntoView({ behavior: 'smooth' });
-        }}
         onOpenBasesModal={() => setIsBasesModalOpen(true)}
         onExportExcel={() => setExportPickerMode('excel')}
         onPrintPDF={() => setExportPickerMode('pdf')}
@@ -460,17 +455,6 @@ export default function App() {
             <div className="print-screen-only">
               <KPISection
                 kpis={activeKPIs}
-                isSimulated={simConfig.active && simConfig.percentage !== 0}
-              />
-            </div>
-
-            {/* Parecer Executivo de IA */}
-            <div id="ai-advisor-section">
-              <AIAssistantSection
-                kpis={activeKPIs}
-                agentsData={agentsData}
-                redesData={redesData}
-                regioesData={regioesData}
                 isSimulated={simConfig.active && simConfig.percentage !== 0}
               />
             </div>

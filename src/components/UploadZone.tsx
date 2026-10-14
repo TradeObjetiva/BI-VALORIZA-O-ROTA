@@ -361,7 +361,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                 Custo Operacional
               </h3>
               <p className="text-xs text-[#9090aa] leading-relaxed">
-                Análise exclusiva de folha, benefícios (Caju/Jaé/Riocard), encargos 60,25% e supervisão.
+                Análise exclusiva de folha, benefícios (Caju/Jaé/Riocard), encargos 68,25% e supervisão.
               </p>
             </div>
           </button>

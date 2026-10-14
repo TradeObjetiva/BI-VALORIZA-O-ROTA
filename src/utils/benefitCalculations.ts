@@ -190,9 +190,15 @@ export function calcularScoreCompatibilidade(
     return 100;
   }
 
-  // 3. CPFs válidos com 8 ou mais dígitos iguais
+  // 3. CPFs válidos com 8 ou mais dígitos iguais (desde que os nomes não sejam de pessoas totalmente diferentes)
   if (cA.length >= 8 && cB.length >= 8 && cA === cB) {
-    return 100;
+    const tokA = getNomeTokens(cleanA);
+    const tokB = getNomeTokens(cleanB);
+    const setB = new Set(tokB);
+    const hasCommonToken = tokA.some((t) => setB.has(t));
+    if (hasCommonToken || levenshteinDistance(cleanA, cleanB) <= Math.max(cleanA.length, cleanB.length) * 0.6) {
+      return 100;
+    }
   }
 
   // Ignora match entre vaga/banco e pessoa real
@@ -704,19 +710,16 @@ export function calculateConfronto(
     matched: boolean;
   }
 
-  const rotaAggs: RotaAgg[] = [];
+  const rotaAggsMap: Record<string, RotaAgg> = {};
 
   tradeRecords.forEach((tr) => {
-    const rawCpf = normalizeCpf(tr.cpf);
-    const rawNome = cleanNomeForMatching(tr.agente);
-    if (!rawNome && !rawCpf) return;
+    const agName = (tr.agente && tr.agente.trim()) ? tr.agente.trim() : '(Sem Agente Atribuído)';
+    const agKey = agName.toUpperCase().replace(/\s+/g, ' ');
 
-    let agg = findBestMatch(tr.agente, tr.cpf, rotaAggs, 85)?.item;
-
-    if (!agg) {
-      agg = {
-        chave: rawCpf && rawCpf.length >= 8 ? `cpf-${rawCpf}` : `nome-${rawNome || Math.random()}`,
-        nome: tr.agente || '(Sem Agente)',
+    if (!rotaAggsMap[agKey]) {
+      rotaAggsMap[agKey] = {
+        chave: agKey,
+        nome: agName,
         cpf: tr.cpf || '—',
         visitasSemanais: 0,
         valorSemanal: 0,
@@ -726,16 +729,21 @@ export function calculateConfronto(
         redes: new Set<string>(),
         matched: false,
       };
-      rotaAggs.push(agg);
     }
 
+    const agg = rotaAggsMap[agKey];
     agg.visitasSemanais += tr.visitasSemanais;
     agg.valorSemanal += tr.valorSemanal;
     agg.horasSemanais += tr.horasSemanais;
     agg.horasMensais += (tr.horasSemanais * MULTIPLIER);
     if (tr.local) agg.locais.add(tr.local);
     if (tr.rede) agg.redes.add(tr.rede);
+    if (tr.cpf && tr.cpf !== '—' && (!agg.cpf || agg.cpf === '—' || agg.cpf.length < 8)) {
+      agg.cpf = tr.cpf;
+    }
   });
+
+  const rotaAggs = Object.values(rotaAggsMap);
 
   const confrontoRecords: ConfrontoRecord[] = [];
 
@@ -835,6 +843,8 @@ export function calculateConfronto(
       taxaAdm: br.taxaAdm,
       premiacao: br.premiacao,
       tributos: br.tributos,
+      subtotalDiversos: br.subtotalDiversos,
+      epiSeguro: br.epiSeguro,
       custoRh,
       custoTotalMensal,
       custoPorHora: HORAS_MES_PADRAO > 0 ? custoTotalMensal / HORAS_MES_PADRAO : 0,
@@ -958,32 +968,35 @@ export function auditarConciliacaoNomes(
     matched: boolean;
   }
 
-  const agentesValorizacao: AgenteValorizacaoItem[] = [];
+  const agentesValorizacaoMap: Record<string, AgenteValorizacaoItem> = {};
 
   tradeRecords.forEach((tr) => {
-    const nomeNorm = cleanNomeForMatching(tr.agente);
-    const cpfNorm = normalizeCpf(tr.cpf);
-    if (!nomeNorm && !cpfNorm) return;
+    const agName = (tr.agente && tr.agente.trim()) ? tr.agente.trim() : '(Sem Agente Atribuído)';
+    const agKey = agName.toUpperCase().replace(/\s+/g, ' ');
 
-    let item = findBestMatch(tr.agente, tr.cpf, agentesValorizacao, 85)?.item;
-
-    if (!item) {
-      item = {
-        id: `ag-${agentesValorizacao.length}`,
-        nome: tr.agente || '(Sem Agente)',
+    if (!agentesValorizacaoMap[agKey]) {
+      agentesValorizacaoMap[agKey] = {
+        id: `ag-${Object.keys(agentesValorizacaoMap).length}`,
+        nome: agName,
         cpf: tr.cpf || '—',
-        nomeOriginal: tr.agente || '(Sem Agente)',
+        nomeOriginal: agName,
         cpfOriginal: tr.cpf || '—',
         valorSemanal: 0,
         faturamentoMensal: 0,
         matched: false,
       };
-      agentesValorizacao.push(item);
     }
 
+    const item = agentesValorizacaoMap[agKey];
     item.valorSemanal += tr.valorSemanal;
     item.faturamentoMensal += tr.valorSemanal * MULTIPLIER;
+    if (tr.cpf && tr.cpf !== '—' && (!item.cpf || item.cpf === '—' || item.cpf.length < 8)) {
+      item.cpf = tr.cpf;
+      item.cpfOriginal = tr.cpf;
+    }
   });
+
+  const agentesValorizacao = Object.values(agentesValorizacaoMap);
 
   const nomesApenasNoCusto: ConciliacaoFaltanteItem[] = [];
   let totalConciliados = 0;

@@ -15,13 +15,118 @@ export const MULTIPLIER = 4.334; // Base oficial da agência: 4,334 semanas por 
 export function parseNum(val: any): number {
   if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  
   const s = String(val)
     .replace('R$', '')
     .replace(/\s+/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const n = parseFloat(s);
+    .trim();
+
+  if (!s) return 0;
+
+  // If contains both dot and comma (Brazilian currency/thousand format: e.g. 1.250,50)
+  if (s.includes('.') && s.includes(',')) {
+    const normalized = s.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(normalized);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // If contains comma only (e.g. 3,5 or 1250,50)
+  if (s.includes(',')) {
+    const n = parseFloat(s.replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  // If contains dot only with 1 or 2 decimals (e.g. 3.5, 3.50, 240.0) -> decimal
+  if (/^\d+\.\d{1,2}$/.test(s)) {
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // Fallback
+  const normalized = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(normalized);
   return isNaN(n) ? 0 : n;
+}
+
+/**
+ * Parses hours from varied formats:
+ * - Time format: "03:30", "3:30", "03:30:00" -> 3.5
+ * - Text format: "3h30", "3h 30m", "3h30min", "3h" -> 3.5
+ * - Decimal: "3,5", "3.5", "3,50" -> 3.5
+ * - Excel time serial fraction: 0.14583333333333334 -> 3.5 (0.1458 * 24)
+ */
+export function parseHours(val: any): number {
+  if (val === null || val === undefined || val === '') return 0;
+
+  if (typeof val === 'number') {
+    if (isNaN(val)) return 0;
+    // Excel time fraction (e.g. 0.14583333333333334 for 03:30)
+    if (val > 0 && val < 1 && val.toString().length > 6) {
+      return Math.round(val * 24 * 100) / 100;
+    }
+    return val;
+  }
+
+  const s = String(val).trim();
+  if (!s) return 0;
+
+  // 1. Time format "HH:MM" or "HH:MM:SS" (e.g. "03:30", "3:30", "03:30:00")
+  if (s.includes(':')) {
+    const parts = s.replace(/[^0-9:]/g, '').split(':');
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    const sec = parseInt(parts[2], 10) || 0;
+    return Math.round((h + m / 60 + sec / 3600) * 100) / 100;
+  }
+
+  // 2. Portuguese format "3h30", "3h 30m", "3h30min", "3h"
+  const hMatch = s.match(/^(\d+(?:[.,]\d+)?)\s*h(?:oras?)?(?:\s*(\d+)(?:m|min)?)?/i);
+  if (hMatch) {
+    const h = parseFloat(hMatch[1].replace(',', '.'));
+    const m = hMatch[2] ? parseFloat(hMatch[2]) : 0;
+    return Math.round(((isNaN(h) ? 0 : h) + m / 60) * 100) / 100;
+  }
+
+  // 3. Decimal number with comma or dot (e.g. "3,5", "3.5", "3,50")
+  return parseNum(s);
+}
+
+function normalizeKey(k: string): string {
+  return k
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+export function findRowValue(r: RawTradeRow, aliases: string[]): any {
+  if (!r || typeof r !== 'object') return undefined;
+  const normalizedAliases = aliases.map(normalizeKey);
+  const keys = Object.keys(r);
+
+  // 1. Exact normalized match
+  for (const alias of normalizedAliases) {
+    for (const key of keys) {
+      if (normalizeKey(key) === alias) {
+        const val = r[key];
+        if (val !== null && val !== undefined && val !== '') return val;
+      }
+    }
+  }
+
+  // 2. Partial match
+  for (const alias of normalizedAliases) {
+    for (const key of keys) {
+      const nk = normalizeKey(key);
+      if (nk.includes(alias) || alias.includes(nk)) {
+        const val = r[key];
+        if (val !== null && val !== undefined && val !== '') return val;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 export function fmt(v: number): string {
@@ -46,106 +151,212 @@ export function fmtNumber(v: number, decimals = 1): string {
  * maiúsculas/minúsculas e acentuação (ex: ' VALOR SEMANAL ' -> 'VALOR SEMANAL').
  */
 export function getRawProp(r: RawTradeRow, ...keys: string[]): any {
-  if (!r || typeof r !== 'object') return undefined;
+  return findRowValue(r, keys);
+}
 
-  // 1. Acesso direto exato
-  for (const k of keys) {
-    if (r[k] !== undefined && r[k] !== null && r[k] !== '') return r[k];
+export function getRowVisitasSemanais(r: RawTradeRow): number {
+  const rawFreq = findRowValue(r, [
+    'FREQ. SEMANAL',
+    'FREQ SEMANAL',
+    'FREQUENCIA SEMANAL',
+    'FREQUENCIA',
+    'FREQUNCIA',
+    'FREQ?NCIA',
+    'FREQ',
+    'VISITAS SEMANAIS',
+    'VISITAS',
+    'DIAS POR SEMANA',
+    'DIAS NA SEMANA',
+    'DIAS SEMANAIS',
+    'QTD DIAS',
+    'DIAS',
+  ]);
+
+  if (rawFreq === null || rawFreq === undefined || rawFreq === '') return 1;
+
+  if (typeof rawFreq === 'number') {
+    return rawFreq > 0 ? rawFreq : 1;
   }
 
-  // 2. Acesso normalizado limpando espaços nas bordas e acentos
-  const rKeys = Object.keys(r);
-  for (const target of keys) {
-    const normTarget = target.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    for (const rk of rKeys) {
-      const normRk = rk.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (normRk === normTarget && r[rk] !== undefined && r[rk] !== null && r[rk] !== '') {
-        return r[rk];
+  const s = String(rawFreq).toUpperCase().trim();
+
+  if (s.includes('15/15') || s.includes('QUINZENAL')) return 0.5;
+  if (s.includes('SEG A SAB') || s.includes('SEGUNDA A SABADO') || s.includes('SEG A SÁB')) return 6;
+  if (s.includes('SEG A SEX') || s.includes('SEGUNDA A SEXTA')) return 5;
+
+  // Regex matches e.g. "6X", "6 X", "6X/SEM", "7X", "5X", "4X", "3X", "2X", "1X"
+  const xMatch = s.match(/(\d+(?:[.,]\d+)?)\s*X/i);
+  if (xMatch) {
+    const val = parseFloat(xMatch[1].replace(',', '.'));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // Regex matches e.g. "6 DIAS", "6 VEZES", "6 VISITAS"
+  const wordMatch = s.match(/(\d+(?:[.,]\d+)?)\s*(?:DIAS?|VEZES|VISITAS?)/i);
+  if (wordMatch) {
+    const val = parseFloat(wordMatch[1].replace(',', '.'));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  const n = parseNum(s);
+  return n > 0 ? n : 1;
+}
+
+export const DAY_COLUMN_PATTERNS = [
+  { day: 'dom', aliases: ['DOM', 'DOMINGO', 'DOM.'] },
+  { day: 'seg', aliases: ['SEG', 'SEGUNDA', 'SEG.'] },
+  { day: 'ter', aliases: ['TER', 'TERCA', 'TERÇA', 'TER.'] },
+  { day: 'qua', aliases: ['QUA', 'QUARTA', 'QUA.'] },
+  { day: 'qui', aliases: ['QUI', 'QUINTA', 'QUI.'] },
+  { day: 'sex', aliases: ['SEX', 'SEXTA', 'SEX.'] },
+  { day: 'sab', aliases: ['SAB', 'SABADO', 'SÁBADO', 'SAB.'] },
+];
+
+/**
+ * Calculates total scheduled hours and active days from the day-of-week columns (DOM, SEG, TER, QUA, QUI, SEX, SAB).
+ */
+export function getRowHorasDosDias(r: RawTradeRow): {
+  totalHorasDias: number;
+  hasDayColumns: boolean;
+  diasAtivos: number;
+} {
+  let total = 0;
+  let hasDayColumns = false;
+  let diasAtivos = 0;
+
+  for (const { aliases } of DAY_COLUMN_PATTERNS) {
+    const val = findRowValue(r, aliases);
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      hasDayColumns = true;
+      const h = parseHours(val);
+      if (h > 0) {
+        total += h;
+        diasAtivos++;
       }
     }
   }
 
-  return undefined;
-}
-
-export function getRowVisitasSemanais(r: RawTradeRow): number {
-  const fsRaw = getRawProp(r, 'FREQ. SEMANAL', 'FREQUENCIA SEMANAL', 'FREQ');
-  const fs = String(fsRaw || '').toUpperCase().trim();
-  if (fs.includes('15/15')) return 0.5;
-  if (fs.includes('5X') || fs === '5') return 5;
-  if (fs.includes('4X') || fs === '4') return 4;
-  if (fs.includes('3X') || fs === '3') return 3;
-  if (fs.includes('2X') || fs === '2') return 2;
-  if (fs.includes('1X') || fs === '1') return 1;
-
-  const freqVal = getRawProp(r, 'FREQUÊNCIA', 'FREQUENCIA', 'FREQUNCIA', 'FREQ?NCIA');
-  const n = parseNum(freqVal);
-  if (n > 0) return n;
-
-  const nFs = parseNum(fsRaw);
-  return nFs > 0 ? nFs : 1;
+  return {
+    totalHorasDias: Math.round(total * 100) / 100,
+    hasDayColumns,
+    diasAtivos,
+  };
 }
 
 export function getRowHorasUnitarias(r: RawTradeRow): number {
-  const h = parseNum(
-    getRawProp(
-      r,
-      'HORAS POR VISITA',
-      'Horas por Visita',
-      'HORAS/VISITA',
-      'HORAS',
-      'HORA'
-    )
-  );
-  return h > 0 ? h : 1;
+  const rawHours = findRowValue(r, [
+    'HORAS POR VISITA',
+    'HORA POR VISITA',
+    'HORAS/VISITA',
+    'HORAS VISITA',
+    'HORA VISITA',
+    'TEMPO POR VISITA',
+    'TEMPO VISITA',
+    'TEMPO EM LOJA',
+    'HORAS DIARIAS',
+    'HORA DIARIA',
+    'HORAS/DIA',
+    'HORAS / DIA',
+    'HORAS POR DIA',
+    'HORA POR DIA',
+    'HORAS DIA',
+    'CARGA HORARIA DIARIA',
+    'CARGA HORARIA',
+    'JORNADA DIARIA',
+    'JORNADA',
+    'HORAS',
+    'HORA',
+    'TEMPO',
+  ]);
+
+  const h = parseHours(rawHours);
+  if (h > 0) return h;
+
+  // If day columns exist (DOM, SEG, TER, QUA, QUI, SEX, SAB):
+  const { totalHorasDias, hasDayColumns } = getRowHorasDosDias(r);
+  if (hasDayColumns && totalHorasDias > 0) {
+    const visitas = getRowVisitasSemanais(r);
+    return visitas > 0 ? Math.round((totalHorasDias / visitas) * 100) / 100 : totalHorasDias;
+  }
+
+  return 1;
 }
 
 export function getRowHorasSemanais(r: RawTradeRow): number {
-  return getRowHorasUnitarias(r) * getRowVisitasSemanais(r);
+  // 1. If spreadsheet has columns for days of the week (DOM, SEG, TER, QUA, QUI, SEX, SAB):
+  // The weekly hours of this row is the sum of hours scheduled across the days of the week!
+  const { totalHorasDias, hasDayColumns } = getRowHorasDosDias(r);
+  if (hasDayColumns && totalHorasDias > 0) {
+    return totalHorasDias;
+  }
+
+  // 2. If spreadsheet already has an explicit weekly hours column, respect it
+  const rawWeeklyHours = findRowValue(r, [
+    'HORAS SEMANAIS',
+    'HORA SEMANAL',
+    'HORAS/SEMANA',
+    'HORAS / SEMANA',
+    'HORAS/SEM',
+    'HORAS / SEM',
+    'HORAS POR SEMANA',
+    'CARGA SEMANAL',
+    'CARGA HORARIA SEMANAL',
+    'TOTAL HORAS SEMANAIS',
+    'TOTAL HORAS',
+    'TOTAL DE HORAS',
+  ]);
+
+  if (rawWeeklyHours !== undefined && rawWeeklyHours !== null && rawWeeklyHours !== '') {
+    const weeklyHours = parseHours(rawWeeklyHours);
+    if (weeklyHours > 0) {
+      return weeklyHours;
+    }
+  }
+
+  // 3. Otherwise calculate: horas unitárias (diárias / por visita) * frequência semanal
+  return Math.round(getRowHorasUnitarias(r) * getRowVisitasSemanais(r) * 100) / 100;
 }
 
 export function getRowValorSemanal(r: RawTradeRow): number {
   // 1. Procura primeiro colunas explícitas de valor semanal
-  const vs = parseNum(
-    getRawProp(
-      r,
-      'VALOR SEMANAL',
-      'VL SEMANAL',
-      'FATURAMENTO SEMANAL',
-      'TOTAL SEMANAL',
-      'VALOR SEMANA'
-    )
-  );
+  const rawVs = findRowValue(r, [
+    'VALOR SEMANAL',
+    'VL SEMANAL',
+    'FATURAMENTO SEMANAL',
+    'TOTAL SEMANAL',
+    'VALOR SEMANA',
+    'VALOR/SEM',
+    'VALOR / SEM',
+  ]);
+  const vs = parseNum(rawVs);
   if (vs > 0) return vs;
 
   // 2. Se tiver valor mensal explícito na linha, calcula o semanal dividindo por 4.334
-  const vm = parseNum(
-    getRawProp(
-      r,
-      'VALOR MENSAL',
-      'VL MENSAL',
-      'FATURAMENTO MENSAL',
-      'TOTAL MENSAL',
-      'VALOR MES'
-    )
-  );
+  const rawVm = findRowValue(r, [
+    'VALOR MENSAL',
+    'VL MENSAL',
+    'FATURAMENTO MENSAL',
+    'TOTAL MENSAL',
+    'VALOR MES',
+  ]);
+  const vm = parseNum(rawVm);
   if (vm > 0) return vm / MULTIPLIER;
 
   // 3. Fallback: valor unitário por visita multiplicado pelas visitas da semana
-  const vu = parseNum(
-    getRawProp(
-      r,
-      'VALOR',
-      'Custo Visita',
-      'CUSTO VISITA',
-      'Custo por Visita',
-      'VALOR TOTAL',
-      'VL TOTAL',
-      'VALOR COBRADO',
-      'VALOR UNITARIO',
-      'PREÇO UNITÁRIO'
-    )
-  );
+  const rawVu = findRowValue(r, [
+    'VALOR',
+    'Custo Visita',
+    'CUSTO VISITA',
+    'Custo por Visita',
+    'VALOR TOTAL',
+    'VL TOTAL',
+    'VALOR COBRADO',
+    'VALOR UNITARIO',
+    'PREÇO UNITÁRIO',
+    'VALOR/VISITA',
+    'VALOR POR VISITA',
+  ]);
+  const vu = parseNum(rawVu);
   return vu * getRowVisitasSemanais(r);
 }
 
@@ -159,87 +370,92 @@ export function transformRawRow(r: RawTradeRow, idx: number): TradeRecord {
   const horasSemanais = getRowHorasSemanais(r);
   const horasMensais = horasSemanais * MULTIPLIER;
   const valorSemanal = getRowValorSemanal(r);
-  const valorUnitario =
-    parseNum(
-      getRawProp(
-        r,
-        'VALOR',
-        'Custo Visita',
-        'CUSTO VISITA',
-        'Custo por Visita',
-        'VALOR UNITARIO'
-      )
-    ) || (visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0);
+  const rawValor = findRowValue(r, [
+    'VALOR',
+    'Custo Visita',
+    'CUSTO VISITA',
+    'Custo por Visita',
+    'VALOR TOTAL',
+    'VL TOTAL',
+    'VALOR UNITARIO',
+    'VALOR/VISITA',
+  ]);
+  const valorUnitario = parseNum(rawValor) || (visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0);
   const vm = valorSemanal * MULTIPLIER;
   const custoPorVisita = visitasSemanais > 0 ? valorSemanal / visitasSemanais : 0;
   const valorPorHora = horasSemanais > 0 ? valorSemanal / horasSemanais : 0;
 
-  const agente = String(
-    getRawProp(
-      r,
-      'AGENTE',
-      'PROMOTOR',
-      'NOME',
-      'COLABORADOR',
-      'NOME DO PROMOTOR',
-      'AGENTE DE VENDAS',
-      'FUNCIONARIO'
-    ) || ''
-  ).trim() || '(Sem Agente)';
+  const agenteVal = findRowValue(r, [
+    'AGENTE',
+    'PROMOTOR',
+    'PROMOTORA',
+    'NOME',
+    'COLABORADOR',
+    'NOME DO AGENTE',
+    'NOME DO PROMOTOR',
+    'AGENTE DE VENDAS',
+    'FUNCIONARIO',
+  ]) || '';
 
-  const cpf = String(
-    getRawProp(r, 'CPF', 'CPF DO AGENTE', 'CPF PROMOTOR', 'DOCUMENTO') || ''
-  ).trim() || '—';
+  const cpfVal = findRowValue(r, [
+    'CPF',
+    'CPF DO AGENTE',
+    'CPF PROMOTOR',
+    'DOCUMENTO',
+  ]) || '—';
 
-  const form = String(
-    getRawProp(
-      r,
-      'FORM',
-      'ATIVIDADE',
-      'PESQUISA',
-      'FORMULARIO',
-      'CATEGORIA',
-      'PROJETO'
-    ) || ''
-  ).trim() || '(Sem Formulário)';
+  const formVal = findRowValue(r, [
+    'FORM',
+    'ATIVIDADE',
+    'PESQUISA',
+    'FORMULARIO',
+    'MARCA',
+    'CATEGORIA',
+    'PROJETO',
+  ]) || '';
 
-  const rede = String(
-    getRawProp(r, 'REDE', 'CLIENTE', 'BANDEIRA') || ''
-  ).trim() || '(Sem Rede)';
+  const redeVal = findRowValue(r, [
+    'REDE',
+    'CLIENTE',
+    'BANDEIRA',
+    'REDE DE VAREJO',
+  ]) || '';
 
-  const regiao = String(
-    getRawProp(
-      r,
-      'REGIAO',
-      'MUNICÍPIO',
-      'MUNICIPIO',
-      'CIDADE',
-      'ESTADO',
-      'UF',
-      'REGIONAL'
-    ) || ''
-  ).trim() || '(Sem Região)';
+  const regiaoVal = findRowValue(r, [
+    'REGIAO',
+    'MUNICÍPIO',
+    'MUNICIPIO',
+    'CIDADE',
+    'ESTADO',
+    'UF',
+    'REGIONAL',
+    'PRACA',
+  ]) || '';
 
-  const local = String(
-    getRawProp(
-      r,
-      'LOCAL',
-      'RAZAO SOCIAL',
-      'LOJA',
-      'PONTO DE VENDA',
-      'PDV'
-    ) || ''
-  ).trim() || '(Sem Local)';
+  const localVal = findRowValue(r, [
+    'LOCAL',
+    'RAZAO SOCIAL',
+    'NOME FANTASIA',
+    'LOJA',
+    'PONTO DE VENDA',
+    'PDV',
+  ]) || '';
+
+  const freqSemanalVal = findRowValue(r, [
+    'FREQ. SEMANAL',
+    'FREQ SEMANAL',
+    'FREQUENCIA',
+  ]) || `${visitasSemanais}X`;
 
   return {
     id: `rec-${idx}-${Math.random().toString(36).substring(2, 7)}`,
-    form,
-    rede,
-    agente,
-    cpf,
-    regiao,
-    local,
-    freqSemanal: String(r['FREQ. SEMANAL'] || `${visitasSemanais}X`).trim(),
+    form: String(formVal).trim() || '(Sem Formulário)',
+    rede: String(redeVal).trim() || '(Sem Rede)',
+    agente: String(agenteVal).trim() || '(Sem Agente)',
+    cpf: String(cpfVal).trim() || '—',
+    regiao: String(regiaoVal).trim() || '(Sem Região)',
+    local: String(localVal).trim() || '(Sem Local)',
+    freqSemanal: String(freqSemanalVal).trim(),
     visitasSemanais,
     horasPorVisita,
     horasSemanais,

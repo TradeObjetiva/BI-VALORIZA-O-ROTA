@@ -102,22 +102,48 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           throw new Error('A planilha está vazia.');
         }
 
-        // Procura a linha com os cabeçalhos de rotas (contendo 'agente', 'rede', 'local', 'cliente', etc.)
-        let headerIdx = json.findIndex((row) => {
-          if (!Array.isArray(row)) return false;
-          const str = row.map((c) => String(c || '').toLowerCase()).join(' ');
-          return (
-            (str.includes('agente') || str.includes('promotor') || str.includes('colaborador')) &&
-            (str.includes('rede') || str.includes('local') || str.includes('visita') || str.includes('cliente') || str.includes('custo'))
-          );
-        });
+        // Find header row: Look for the row with the strongest header signature (contains text labels like AGENTE, REDE, FORM, etc.)
+        let headerIdx = -1;
+        let maxHeaderScore = 0;
 
-        if (headerIdx === -1) {
-          // Fallback: procura a primeira linha com pelo menos 3 células preenchidas
+        for (let r = 0; r < Math.min(json.length, 20); r++) {
+          const row = json[r];
+          if (!Array.isArray(row)) continue;
+
+          let score = 0;
+          row.forEach((cell) => {
+            if (cell !== null && cell !== undefined) {
+              const s = String(cell).trim().toUpperCase();
+              if (s.length > 0 && isNaN(Number(s))) {
+                score += 1;
+                if (
+                  ['AGENTE', 'PROMOTOR', 'REDE', 'LOCAL', 'FORM', 'REGIAO', 'VALOR', 'LIDER', 'FREQ', 'DOM', 'SEG', 'RAZAO'].some(
+                    (k) => s.includes(k)
+                  )
+                ) {
+                  score += 6;
+                }
+              }
+            }
+          });
+
+          if (score > maxHeaderScore) {
+            maxHeaderScore = score;
+            headerIdx = r;
+          }
+        }
+
+        // Fallback to first non-empty row if scoring found nothing
+        if (headerIdx === -1 || maxHeaderScore < 2) {
           headerIdx = json.findIndex(
             (row) =>
               Array.isArray(row) &&
-              row.filter((cell) => cell !== null && cell !== undefined && String(cell).trim() !== '').length >= 3
+              row.some(
+                (cell) =>
+                  cell !== null &&
+                  cell !== undefined &&
+                  String(cell).trim() !== ''
+              )
           );
         }
 
@@ -126,22 +152,33 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         }
 
         const headers = json[headerIdx].map((h: any) => String(h || '').trim());
-        const rows: RawTradeRow[] = json
-          .slice(headerIdx + 1)
-          .filter(
-            (row) =>
-              Array.isArray(row) &&
-              row.some(
-                (v) => v !== null && v !== undefined && String(v).trim() !== ''
-              )
-          )
-          .map((row) => {
-            const obj: RawTradeRow = {};
-            headers.forEach((h, i) => {
-              if (h) obj[h] = row[i] ?? null;
-            });
-            return obj;
+        const rows: RawTradeRow[] = [];
+
+        for (let r = headerIdx + 1; r < json.length; r++) {
+          const rowData = json[r];
+          if (
+            !Array.isArray(rowData) ||
+            !rowData.some(
+              (v) => v !== null && v !== undefined && String(v).trim() !== ''
+            )
+          ) {
+            continue;
+          }
+
+          const obj: RawTradeRow = {};
+          headers.forEach((h, c) => {
+            if (!h) return;
+            const cellAddr = XLSX.utils.encode_cell({ r, c });
+            const cell = worksheet[cellAddr];
+            // If cell has formatted text with colon (time) e.g. "03:30", preserve it
+            if (cell && cell.w && (cell.w.includes(':') || /\b\d+h\b/i.test(cell.w))) {
+              obj[h] = cell.w;
+            } else {
+              obj[h] = rowData[c] ?? null;
+            }
           });
+          rows.push(obj);
+        }
 
         if (rows.length === 0) {
           throw new Error('Nenhum registro de rotas encontrado.');

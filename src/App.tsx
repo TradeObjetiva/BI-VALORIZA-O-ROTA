@@ -112,6 +112,11 @@ export default function App() {
     agente: '',
     regiao: '',
     freq: '',
+    forms: null,
+    redes: null,
+    agentes: null,
+    regioes: null,
+    freqs: null,
     search: '',
   });
 
@@ -137,6 +142,11 @@ export default function App() {
         agente: '',
         regiao: '',
         freq: '',
+        forms: null,
+        redes: null,
+        agentes: null,
+        regioes: null,
+        freqs: null,
         search: '',
       });
       setSimConfig({
@@ -212,11 +222,42 @@ export default function App() {
   // Registros de valorização filtrados
   const filteredRecords = useMemo(() => {
     return transformedRecords.filter((rec) => {
-      if (filters.form && rec.form !== filters.form) return false;
-      if (filters.rede && rec.rede !== filters.rede) return false;
-      if (filters.agente && rec.agente !== filters.agente) return false;
-      if (filters.regiao && rec.regiao !== filters.regiao) return false;
-      if (filters.freq && rec.freqSemanal !== filters.freq) return false;
+      // Região (Multi-seleção com fallback para single)
+      if (filters.regioes !== null && filters.regioes !== undefined) {
+        if (!filters.regioes.includes(rec.regiao)) return false;
+      } else if (filters.regiao && rec.regiao !== filters.regiao) {
+        return false;
+      }
+
+      // Rede (Multi-seleção com fallback para single)
+      if (filters.redes !== null && filters.redes !== undefined) {
+        if (!filters.redes.includes(rec.rede)) return false;
+      } else if (filters.rede && rec.rede !== filters.rede) {
+        return false;
+      }
+
+      // Formulário / Marca (Multi-seleção com fallback para single)
+      if (filters.forms !== null && filters.forms !== undefined) {
+        if (!filters.forms.includes(rec.form)) return false;
+      } else if (filters.form && rec.form !== filters.form) {
+        return false;
+      }
+
+      // Agente / Promotor (Multi-seleção com fallback para single)
+      if (filters.agentes !== null && filters.agentes !== undefined) {
+        if (!filters.agentes.includes(rec.agente)) return false;
+      } else if (filters.agente && rec.agente !== filters.agente) {
+        return false;
+      }
+
+      // Frequência Semanal (Multi-seleção com fallback para single)
+      if (filters.freqs !== null && filters.freqs !== undefined) {
+        if (!filters.freqs.includes(rec.freqSemanal)) return false;
+      } else if (filters.freq && rec.freqSemanal !== filters.freq) {
+        return false;
+      }
+
+      // Busca textual livre
       if (filters.search) {
         const q = filters.search.toLowerCase();
         const str = `${rec.form} ${rec.rede} ${rec.agente} ${rec.cpf} ${rec.regiao} ${rec.local}`.toLowerCase();
@@ -423,6 +464,11 @@ export default function App() {
                   agente: '',
                   regiao: '',
                   freq: '',
+                  forms: null,
+                  redes: null,
+                  agentes: null,
+                  regioes: null,
+                  freqs: null,
                   search: '',
                 })
               }

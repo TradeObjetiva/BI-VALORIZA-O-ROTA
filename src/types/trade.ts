@@ -52,6 +52,11 @@ export interface FilterState {
   agente: string;
   regiao: string;
   freq: string;
+  forms?: string[] | null;
+  redes?: string[] | null;
+  agentes?: string[] | null;
+  regioes?: string[] | null;
+  freqs?: string[] | null;
   search: string;
 }
 
